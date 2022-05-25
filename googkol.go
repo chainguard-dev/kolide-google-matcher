@@ -6,15 +6,16 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gocarina/gocsv"
 )
 
 var (
-	kolideCSVFlag = flag.String("kolide-csv", "", "G")
-	googleCSVFlag = flag.String("google-csv", "", "this is a personal machine")
-	// dryRunFlag    = flag.Bool("dry-run", false, "do nothing")
-	// maxAge        = 7 * 24 * time.Hour
+	kolideCSVFlag    = flag.String("kolide-csv", "", "G")
+	googleCSVFlag    = flag.String("google-csv", "", "this is a personal machine")
+	maxAge           = 4 * 24 * time.Hour
+	googleDateFormat = "January 2, 2006 at 3:04 PM MST"
 )
 
 type KolideRecord struct {
@@ -37,10 +38,11 @@ func parseKolideCSV(path string) ([]*KolideRecord, error) {
 }
 
 type GoogleRecord struct {
-	Name  string `csv:"Name"`
-	Email string `csv:"Email"`
-	OS    string `csv:"OS"`
-	Type  string `csv:"Type"`
+	Name     string `csv:"Name"`
+	Email    string `csv:"Email"`
+	OS       string `csv:"OS"`
+	Type     string `csv:"Type"`
+	LastSync string `csv:"Last Sync"`
 }
 
 func parseGoogleCSV(path string) ([]*GoogleRecord, error) {
@@ -83,7 +85,7 @@ func (f *Found) String() string {
 	return strings.Join(ds, ", ")
 }
 
-func analyze(ks []*KolideRecord, gs []*GoogleRecord) map[string]string {
+func analyze(ks []*KolideRecord, gs []*GoogleRecord) (map[string]string, error) {
 	ik := map[string]*Found{}
 
 	for _, k := range ks {
@@ -95,10 +97,9 @@ func analyze(ks []*KolideRecord, gs []*GoogleRecord) map[string]string {
 		case "LinuxDevice":
 			ik[k.OwnerEmail].Linux++
 		case "WindowsDevice":
-			ik[k.OwnerEmail].Linux++
+			ik[k.OwnerEmail].Windows++
 		case "Mac":
 			ik[k.OwnerEmail].Mac++
-
 		}
 	}
 
@@ -107,8 +108,21 @@ func analyze(ks []*KolideRecord, gs []*GoogleRecord) map[string]string {
 	}
 
 	ig := map[string]*Found{}
+	inScope := 0
 	for _, g := range gs {
 		log.Printf("g: %+v", g)
+
+		seen, err := time.Parse(googleDateFormat, g.LastSync)
+		if err != nil {
+			return nil, fmt.Errorf("parse error for %s: %w", g.LastSync, err)
+		}
+
+		if time.Since(seen) > maxAge {
+			continue
+		}
+
+		inScope++
+
 		if ig[g.Email] == nil {
 			ig[g.Email] = &Found{}
 		}
@@ -116,28 +130,50 @@ func analyze(ks []*KolideRecord, gs []*GoogleRecord) map[string]string {
 		case "Linux":
 			ig[g.Email].Linux++
 		case "Windows":
-			ig[g.Email].Linux++
+			ig[g.Email].Windows++
 		case "Mac":
 			ig[g.Email].Mac++
 		case "Chrome OS":
 			ig[g.Email].ChromeOS++
+		default:
+			log.Printf("Ignoring type %s (%s)", g.Type, g.OS)
+			inScope--
 		}
 	}
 
+	log.Printf("Google: found %d in-scope devices", inScope)
 	issues := map[string]string{}
 
 	for e, g := range ig {
 		k, ok := ik[e]
 		if !ok {
-			issues[e] = fmt.Sprintf("No devices are registered to Kolide, missing: %s", g)
+			gs := g.String()
+			// If no Kolide-enrollable devices are found, skip this line.
+			if gs != "" {
+				issues[e] = fmt.Sprintf("No devices are registered to Kolide, missing: %s", g)
+			}
+			continue
 		}
 
-		if k.String() != g.String() {
-			issues[e] = fmt.Sprintf("mismatch: %s vs %s", k.String(), g.String())
+		mismatches := []string{}
+		if g.Linux > k.Linux {
+			mismatches = append(mismatches, fmt.Sprintf("Google sees %d Linux devices, Kolide sees %d", g.Linux, k.Linux))
+		}
+
+		if g.Mac > k.Mac {
+			mismatches = append(mismatches, fmt.Sprintf("Google sees %d macOS devices, Kolide sees %d", g.Mac, k.Mac))
+		}
+
+		if g.Windows > k.Windows {
+			mismatches = append(mismatches, fmt.Sprintf("Google sees %d Windows devices, Kolide sees %d", g.Windows, k.Windows))
+		}
+
+		if len(mismatches) > 0 {
+			issues[e] = strings.Join(mismatches, ", ")
 		}
 	}
 
-	return issues
+	return issues, nil
 }
 
 func main() {
@@ -153,7 +189,10 @@ func main() {
 		log.Fatalf("google: %v", err)
 	}
 
-	mismatches := analyze(ks, gs)
+	mismatches, err := analyze(ks, gs)
+	if err != nil {
+		log.Fatalf("analyze: %v", err)
+	}
 
 	for k, v := range mismatches {
 		if v != "" {
