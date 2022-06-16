@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/gocarina/gocsv"
+	"github.com/slack-go/slack"
 )
 
 var (
+	slackWebhookURL  = os.Getenv("SLACK_WEBHOOK_URL")
 	kolideCSVFlag    = flag.String("kolide-csv", "", "G")
 	googleCSVFlag    = flag.String("google-csv", "", "this is a personal machine")
 	maxAge           = 4 * 24 * time.Hour
@@ -198,5 +200,23 @@ func main() {
 		if v != "" {
 			log.Printf("%s mismatch: %s", k, v)
 		}
+	}
+
+	// If SLACK_WEBHOOK_URL set in environment, send a copy of the output to Slack
+	if slackWebhookURL != "" {
+		log.Println("Attempting to send output to provided Slack webhook...")
+		lines := []string{}
+		for k, v := range mismatches {
+			if v != "" {
+				lines = append(lines, fmt.Sprintf("%s mismatch: %s", k, v))
+			}
+		}
+		msg := slack.WebhookMessage{
+			Text: strings.Join(lines, "\n\n"),
+		}
+		if err := slack.PostWebhook(slackWebhookURL, &msg); err != nil {
+			log.Fatalf("posting slack webhook: %v", err)
+		}
+		log.Println("Success.")
 	}
 }
