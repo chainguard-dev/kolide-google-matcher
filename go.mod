@@ -1,4 +1,4 @@
-module chainguard.dev/kolnarc
+module chainguard.dev/googkol
 
 go 1.18
 

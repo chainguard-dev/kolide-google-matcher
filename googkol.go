@@ -10,34 +10,17 @@ import (
 
 	"github.com/gocarina/gocsv"
 	"github.com/slack-go/slack"
+
+	"chainguard.dev/googkol/pkg/kollide"
 )
 
 var (
+	kollideAPIKey    = os.Getenv("KOLLIDE_API_KEY")
 	slackWebhookURL  = os.Getenv("SLACK_WEBHOOK_URL")
-	kolideCSVFlag    = flag.String("kolide-csv", "", "G")
 	googleCSVFlag    = flag.String("google-csv", "", "this is a personal machine")
 	maxAge           = 4 * 24 * time.Hour
 	googleDateFormat = "January 2, 2006 at 3:04 PM MST"
 )
-
-type KolideRecord struct {
-	ID         int    `csv:"ID"`
-	DeviceName string `csv:"Device Name"`
-	Type       string `csv:"Type"`
-	OS         string `csv:"OS"`
-	OwnerEmail string `csv:"Owner Email"`
-}
-
-func parseKolideCSV(path string) ([]*KolideRecord, error) {
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, os.ModePerm)
-	if err != nil {
-		return nil, fmt.Errorf("open: %w", err)
-	}
-	defer f.Close()
-	ks := []*KolideRecord{}
-	err = gocsv.UnmarshalFile(f, &ks)
-	return ks, err
-}
 
 type GoogleRecord struct {
 	Name     string `csv:"Name"`
@@ -87,21 +70,22 @@ func (f *Found) String() string {
 	return strings.Join(ds, ", ")
 }
 
-func analyze(ks []*KolideRecord, gs []*GoogleRecord) (map[string]string, error) {
+func analyze(ks []kollide.Device, gs []*GoogleRecord) (map[string]string, error) {
 	ik := map[string]*Found{}
 
 	for _, k := range ks {
 		log.Printf("k: %+v", k)
-		if ik[k.OwnerEmail] == nil {
-			ik[k.OwnerEmail] = &Found{}
+		if ik[k.AssignedOwner.Email] == nil {
+			ik[k.AssignedOwner.Email] = &Found{}
 		}
-		switch k.Type {
-		case "LinuxDevice":
-			ik[k.OwnerEmail].Linux++
-		case "WindowsDevice":
-			ik[k.OwnerEmail].Windows++
-		case "Mac":
-			ik[k.OwnerEmail].Mac++
+		switch k.Platform {
+		case "windows":
+			ik[k.AssignedOwner.Email].Windows++
+		case "darwin":
+			ik[k.AssignedOwner.Email].Mac++
+		default:
+			// Assume Linux, this could be various values (arch, rhel, etc.)
+			ik[k.AssignedOwner.Email].Linux++
 		}
 	}
 
@@ -178,19 +162,31 @@ func analyze(ks []*KolideRecord, gs []*GoogleRecord) (map[string]string, error) 
 	return issues, nil
 }
 
+func getKollideDevices() ([]kollide.Device, error) {
+	if kollideAPIKey == "" {
+		return nil, fmt.Errorf("Missing KOLLIDE_API_KEY. Exiting.")
+	}
+	client := kollide.NewClient(kollideAPIKey)
+	return client.GetAllDevices()
+}
+
 func main() {
 	flag.Parse()
 
-	ks, err := parseKolideCSV(*kolideCSVFlag)
+	ks, err := getKollideDevices()
 	if err != nil {
 		log.Fatalf("kolide: %v", err)
 	}
+	for _, device := range ks {
+		log.Println(device.AssignedOwner.Email)
+	}
+	//log.Println(ks)
+	os.Exit(0)
 
 	gs, err := parseGoogleCSV(*googleCSVFlag)
 	if err != nil {
 		log.Fatalf("google: %v", err)
 	}
-
 	mismatches, err := analyze(ks, gs)
 	if err != nil {
 		log.Fatalf("analyze: %v", err)
