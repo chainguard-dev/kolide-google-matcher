@@ -1,45 +1,25 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/gocarina/gocsv"
 	"github.com/slack-go/slack"
 
+	"chainguard.dev/googkol/pkg/google"
 	"chainguard.dev/googkol/pkg/kollide"
 )
 
 var (
 	kollideAPIKey    = os.Getenv("KOLLIDE_API_KEY")
+	googleAPIKey     = os.Getenv("GOOGLE_API_KEY")
 	slackWebhookURL  = os.Getenv("SLACK_WEBHOOK_URL")
-	googleCSVFlag    = flag.String("google-csv", "", "this is a personal machine")
 	maxAge           = 4 * 24 * time.Hour
 	googleDateFormat = "January 2, 2006 at 3:04 PM MST"
 )
-
-type GoogleRecord struct {
-	Name     string `csv:"Name"`
-	Email    string `csv:"Email"`
-	OS       string `csv:"OS"`
-	Type     string `csv:"Type"`
-	LastSync string `csv:"Last Sync"`
-}
-
-func parseGoogleCSV(path string) ([]*GoogleRecord, error) {
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, os.ModePerm)
-	if err != nil {
-		return nil, fmt.Errorf("open: %w", err)
-	}
-	defer f.Close()
-	gs := []*GoogleRecord{}
-	err = gocsv.UnmarshalFile(f, &gs)
-	return gs, err
-}
 
 type Found struct {
 	Mac      int
@@ -70,11 +50,11 @@ func (f *Found) String() string {
 	return strings.Join(ds, ", ")
 }
 
-func analyze(ks []kollide.Device, gs []*GoogleRecord) (map[string]string, error) {
+func analyze(ks []kollide.Device, gs []google.Device) (map[string]string, error) {
 	ik := map[string]*Found{}
 
 	for _, k := range ks {
-		log.Printf("k: %+v", k)
+		//log.Printf("k: %+v", k)
 		if ik[k.AssignedOwner.Email] == nil {
 			ik[k.AssignedOwner.Email] = &Found{}
 		}
@@ -89,14 +69,14 @@ func analyze(ks []kollide.Device, gs []*GoogleRecord) (map[string]string, error)
 		}
 	}
 
-	for email, f := range ik {
-		log.Printf("%s: %+v", email, f)
-	}
+	//for email, f := range ik {
+	//log.Printf("%s: %+v", email, f)
+	//}
 
 	ig := map[string]*Found{}
 	inScope := 0
 	for _, g := range gs {
-		log.Printf("g: %+v", g)
+		//log.Printf("g: %+v", g)
 
 		seen, err := time.Parse(googleDateFormat, g.LastSync)
 		if err != nil {
@@ -122,12 +102,12 @@ func analyze(ks []kollide.Device, gs []*GoogleRecord) (map[string]string, error)
 		case "Chrome OS":
 			ig[g.Email].ChromeOS++
 		default:
-			log.Printf("Ignoring type %s (%s)", g.Type, g.OS)
+			//log.Printf("Ignoring type %s (%s)", g.Type, g.OS)
 			inScope--
 		}
 	}
 
-	log.Printf("Google: found %d in-scope devices", inScope)
+	//log.Printf("Google: found %d in-scope devices", inScope)
 	issues := map[string]string{}
 
 	for e, g := range ig {
@@ -162,31 +142,32 @@ func analyze(ks []kollide.Device, gs []*GoogleRecord) (map[string]string, error)
 	return issues, nil
 }
 
-func getKollideDevices() ([]kollide.Device, error) {
-	if kollideAPIKey == "" {
-		return nil, fmt.Errorf("Missing KOLLIDE_API_KEY. Exiting.")
-	}
-	client := kollide.NewClient(kollideAPIKey)
-	return client.GetAllDevices()
-}
-
 func main() {
-	flag.Parse()
+	if kollideAPIKey == "" {
+		log.Fatal("Missing KOLLIDE_API_KEY. Exiting.")
+	}
+	if googleAPIKey == "" {
+		log.Fatal("Missing GOOGLE_API_KEY. Exiting.")
+	}
 
-	ks, err := getKollideDevices()
+	ks, err := kollide.NewClient(kollideAPIKey).GetAllDevices()
 	if err != nil {
 		log.Fatalf("kolide: %v", err)
 	}
-	for _, device := range ks {
-		log.Println(device.AssignedOwner.Email)
-	}
-	//log.Println(ks)
-	os.Exit(0)
-
-	gs, err := parseGoogleCSV(*googleCSVFlag)
+	gs, err := google.NewClient(googleAPIKey).GetAllDevices()
 	if err != nil {
 		log.Fatalf("google: %v", err)
 	}
+
+	// TODO: remove once we are actually hitting google API
+	gs = append(gs, google.Device{
+		Name:     "abc",
+		Email:    "jdolitsky@chainguard.dev",
+		OS:       "Windows ME",
+		Type:     "Windows",
+		LastSync: "June 17, 2022 at 10:04 AM MST",
+	})
+
 	mismatches, err := analyze(ks, gs)
 	if err != nil {
 		log.Fatalf("analyze: %v", err)
@@ -200,7 +181,7 @@ func main() {
 
 	// If SLACK_WEBHOOK_URL set in environment, send a copy of the output to Slack
 	if slackWebhookURL != "" {
-		log.Println("Attempting to send output to provided Slack webhook...")
+		log.Println("---\nAttempting to send output to provided Slack webhook...")
 		lines := []string{}
 		for k, v := range mismatches {
 			if v != "" {
