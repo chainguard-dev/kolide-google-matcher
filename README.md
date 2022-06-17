@@ -1,7 +1,13 @@
 # googkol
 
-Find &amp; warn on mismatches in Google/Kolide records
+Find & warn on mismatches in Google/Kolide records
 
 ## usage
 
-`go run . --kolide-csv ~/Downloads/kolide.csv --google-csv ~/Downloads/devices.csv`
+```
+export KOLLIDE_API_KEY="..."
+export GOOGLE_API_KEY="..."
+export SLACK_WEBHOOK_URL="..."
+
+go run .
+```
