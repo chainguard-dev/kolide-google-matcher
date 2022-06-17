@@ -180,7 +180,7 @@ func main() {
 	}
 
 	// If SLACK_WEBHOOK_URL set in environment, send a copy of the output to Slack
-	if slackWebhookURL != "" {
+	if slackWebhookURL != "" && 1 == 2 {
 		log.Println("---\nAttempting to send output to provided Slack webhook...")
 		lines := []string{}
 		for k, v := range mismatches {
