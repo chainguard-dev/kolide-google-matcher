@@ -87,9 +87,6 @@ func (c *Client) GetAllDevices() ([]Device, error) {
 		}
 		req.Header.Add("Authorization", bearer)
 		httpClient := &http.Client{}
-		if nextCursor != "" {
-
-		}
 		r, err := httpClient.Do(req)
 		if err != nil {
 			return nil, err

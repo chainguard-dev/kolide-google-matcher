@@ -42,4 +42,43 @@ _lint: $(LINTERS)
 .PHONY: fix $(FIXERS)
 fix: $(FIXERS)
 
+GIT_TAG ?= dirty-tag
+GIT_VERSION ?= $(shell git describe --tags --always --dirty)
+GIT_HASH ?= $(shell git rev-parse HEAD)
+
+LDFLAGS=-buildid= -X $(PKG).gitVersion=$(GIT_VERSION) \
+        -X $(PKG).gitCommit=$(GIT_HASH) \
+        -X $(PKG).gitTreeState=$(GIT_TREESTATE) \
+        -X $(PKG).buildDate=$(BUILD_DATE)
+
+KOCACHE_PATH=/tmp/ko
+
+define create_kocache_path
+  mkdir -p $(KOCACHE_PATH)
+endef
+
+KO_DOCKER_REPO ?= ghcr.io/chainguard-dev/googkol
+DIGEST ?=
+
+##########
+# ko build
+##########
+
+.PHONY: ko
+ko: ## Build images using ko
+	$(create_kocache_path)
+	$(eval DIGEST := $(shell LDFLAGS="$(LDFLAGS)" GIT_HASH=$(GIT_HASH) GIT_VERSION=$(GIT_VERSION) \
+	KOCACHE=$(KOCACHE_PATH) ko build --bare \
+		--platform=all --tags $(GIT_VERSION) --tags $(GIT_HASH) \
+		chainguard.dev/googkol))
+	@echo Image Digest $(DIGEST)
+
+#######################
+# Sign images
+#######################
+.PHONY: sign-image
+sign-image: ko ## Sign images built using ko
+	cosign sign $(DIGEST)
+
+
 # END: lint-install .
