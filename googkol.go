@@ -124,7 +124,7 @@ func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) 
 				}
 
 				text := fmt.Sprintf("Google sees %d %s devices, Kolide sees %d\nGoogle:\n  %s\nKolide:\n  %s\n",
-					len(gOS[os]), os, len(kOS[os]), strings.Join(kDevs, ", \n  "), strings.Join(gDevs, ", \n  "))
+					len(gOS[os]), os, len(kOS[os]), strings.Join(gDevs, ", \n  "), strings.Join(kDevs, ", \n  "))
 				mismatches = append(mismatches, text)
 				issues[email] = strings.Join(mismatches, "\n")
 			}
