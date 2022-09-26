@@ -2,12 +2,19 @@
 
 Find & warn on mismatches in Google/Kolide records
 
-## usage
+## Usage
 
-```
-export KOLLIDE_API_KEY="..."
-export GOOGLE_API_KEY="..."
+Gather the current list of Desktop machines according to Google:
+
+1. Visit [https://admin.google.com/ac/devices/list?default=true&category=desktop](Google Admin: Mobile Devices)
+2. Click the Download button (top right)
+3. Select All columns
+4. Select Comma-separated values (.csv)
+5. Click "Download CSV"
+
+```shell
+export KOLIDE_API_KEY="..."
 export SLACK_WEBHOOK_URL="..."
 
-go run .
+go run . --endpoints-csv=</path/to/csv>
 ```

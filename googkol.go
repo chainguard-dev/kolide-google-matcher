@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -10,73 +11,57 @@ import (
 	"github.com/slack-go/slack"
 
 	"chainguard.dev/googkol/pkg/google"
-	"chainguard.dev/googkol/pkg/kollide"
+	"chainguard.dev/googkol/pkg/kolide"
 )
 
 var (
-	kollideAPIKey    = os.Getenv("KOLLIDE_API_KEY")
-	googleAPIKey     = os.Getenv("GOOGLE_API_KEY")
+	endpointsCSVFlag = flag.String("endpoints-csv", "", "Path to Google Endpoints CSV file")
+
+	kolideAPIKey = os.Getenv("KOLIDE_API_KEY")
+	//	googleAPIKey     = os.Getenv("GOOGLE_API_KEY")
 	slackWebhookURL  = os.Getenv("SLACK_WEBHOOK_URL")
-	maxAge           = 4 * 24 * time.Hour
+	maxAge           = 5 * 24 * time.Hour
 	googleDateFormat = "January 2, 2006 at 3:04 PM MST"
 )
 
-type Found struct {
-	Mac      int
-	Linux    int
-	Windows  int
-	ChromeOS int
-}
-
-func (f *Found) String() string {
-	if f == nil {
-		return ""
-	}
-
-	ds := []string{}
-
-	if f.Mac > 0 {
-		ds = append(ds, fmt.Sprintf("%d macOS devices", f.Mac))
-	}
-
-	if f.Linux > 0 {
-		ds = append(ds, fmt.Sprintf("%d Linux devices", f.Linux))
-	}
-
-	if f.Windows > 0 {
-		ds = append(ds, fmt.Sprintf("%d Windows devices", f.Windows))
-	}
-
-	return strings.Join(ds, ", ")
-}
-
-func analyze(ks []kollide.Device, gs []google.Device) (map[string]string, error) {
-	ik := map[string]*Found{}
+func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) {
+	kDevices := map[string]map[string][]kolide.Device{}
 
 	for _, k := range ks {
-		//log.Printf("k: %+v", k)
-		if ik[k.AssignedOwner.Email] == nil {
-			ik[k.AssignedOwner.Email] = &Found{}
+		email := k.AssignedOwner.Email
+		log.Printf("k: %+v", k)
+		if kDevices[email] == nil {
+			kDevices[email] = map[string][]kolide.Device{
+				"Windows": []kolide.Device{},
+				"macOS":   []kolide.Device{},
+				"Linux":   []kolide.Device{},
+			}
 		}
+
+		os := ""
+
 		switch k.Platform {
 		case "windows":
-			ik[k.AssignedOwner.Email].Windows++
+			os = "Windows"
 		case "darwin":
-			ik[k.AssignedOwner.Email].Mac++
+			os = "macOS"
 		default:
 			// Assume Linux, this could be various values (arch, rhel, etc.)
-			ik[k.AssignedOwner.Email].Linux++
+			os = "Linux"
 		}
+
+		kDevices[email][os] = append(kDevices[email][os], k)
 	}
 
-	//for email, f := range ik {
-	//log.Printf("%s: %+v", email, f)
-	//}
-
-	ig := map[string]*Found{}
+	gDevices := map[string]map[string][]google.Device{}
 	inScope := 0
+
 	for _, g := range gs {
-		//log.Printf("g: %+v", g)
+		// Empty record
+		if g.Name == "" {
+			continue
+		}
+		log.Printf("g: %+v", g)
 
 		seen, err := time.Parse(googleDateFormat, g.LastSync)
 		if err != nil {
@@ -88,54 +73,61 @@ func analyze(ks []kollide.Device, gs []google.Device) (map[string]string, error)
 		}
 
 		inScope++
-
-		if ig[g.Email] == nil {
-			ig[g.Email] = &Found{}
+		email := g.Email
+		if gDevices[email] == nil {
+			gDevices[email] = map[string][]google.Device{
+				"Windows":  []google.Device{},
+				"macOS":    []google.Device{},
+				"Linux":    []google.Device{},
+				"ChromeOS": []google.Device{},
+			}
 		}
+
+		os := ""
 		switch g.Type {
 		case "Linux":
-			ig[g.Email].Linux++
+			os = "Linux"
 		case "Windows":
-			ig[g.Email].Windows++
+			os = "Windows"
 		case "Mac":
-			ig[g.Email].Mac++
+			os = "macOS"
 		case "Chrome OS":
-			ig[g.Email].ChromeOS++
+			os = "ChromeOS"
 		default:
-			//log.Printf("Ignoring type %s (%s)", g.Type, g.OS)
+			log.Printf("Ignoring type %s (%s)", g.Type, g.OS)
 			inScope--
 		}
+		gDevices[email][os] = append(gDevices[email][os], g)
 	}
 
-	//log.Printf("Google: found %d in-scope devices", inScope)
+	log.Printf("Google: found %d in-scope devices", inScope)
 	issues := map[string]string{}
 
-	for e, g := range ig {
-		k, ok := ik[e]
+	for email, gOS := range gDevices {
+		kOS, ok := kDevices[email]
 		if !ok {
-			gs := g.String()
-			// If no Kolide-enrollable devices are found, skip this line.
-			if gs != "" {
-				issues[e] = fmt.Sprintf("No devices are registered to Kolide, missing: %s", g)
-			}
+			issues[email] = fmt.Sprintf("No devices are registered to Kolide, missing: %+v", gOS)
 			continue
 		}
 
 		mismatches := []string{}
-		if g.Linux > k.Linux {
-			mismatches = append(mismatches, fmt.Sprintf("Google sees %d Linux devices, Kolide sees %d", g.Linux, k.Linux))
-		}
+		for _, os := range []string{"Linux", "macOS", "Windows"} {
+			if len(gOS[os]) > len(kOS[os]) {
+				gDevs := []string{}
+				for _, gd := range gOS[os] {
+					gDevs = append(gDevs, gd.String())
+				}
 
-		if g.Mac > k.Mac {
-			mismatches = append(mismatches, fmt.Sprintf("Google sees %d macOS devices, Kolide sees %d", g.Mac, k.Mac))
-		}
+				kDevs := []string{}
+				for _, kd := range kOS[os] {
+					kDevs = append(kDevs, kd.String())
+				}
 
-		if g.Windows > k.Windows {
-			mismatches = append(mismatches, fmt.Sprintf("Google sees %d Windows devices, Kolide sees %d", g.Windows, k.Windows))
-		}
-
-		if len(mismatches) > 0 {
-			issues[e] = strings.Join(mismatches, ", ")
+				text := fmt.Sprintf("Google sees %d %s devices, Kolide sees %d\nGoogle:\n  %s\nKolide:\n  %s\n",
+					len(gOS[os]), os, len(kOS[os]), strings.Join(kDevs, ", \n  "), strings.Join(gDevs, ", \n  "))
+				mismatches = append(mismatches, text)
+				issues[email] = strings.Join(mismatches, "\n")
+			}
 		}
 	}
 
@@ -143,30 +135,20 @@ func analyze(ks []kollide.Device, gs []google.Device) (map[string]string, error)
 }
 
 func main() {
-	if kollideAPIKey == "" {
-		log.Fatal("Missing KOLLIDE_API_KEY. Exiting.")
-	}
-	if googleAPIKey == "" {
-		log.Fatal("Missing GOOGLE_API_KEY. Exiting.")
+	flag.Parse()
+
+	if kolideAPIKey == "" {
+		log.Fatal("Missing KOLIDE_API_KEY. Exiting.")
 	}
 
-	ks, err := kollide.NewClient(kollideAPIKey).GetAllDevices()
+	ks, err := kolide.New(kolideAPIKey).GetAllDevices()
 	if err != nil {
 		log.Fatalf("kolide: %v", err)
 	}
-	gs, err := google.NewClient(googleAPIKey).GetAllDevices()
+	gs, err := google.New(*endpointsCSVFlag).GetAllDevices()
 	if err != nil {
 		log.Fatalf("google: %v", err)
 	}
-
-	// TODO: remove once we are actually hitting google API
-	gs = append(gs, google.Device{
-		Name:     "abc",
-		Email:    "jdolitsky@chainguard.dev",
-		OS:       "Windows ME",
-		Type:     "Windows",
-		LastSync: "June 17, 2022 at 10:04 AM MST",
-	})
 
 	mismatches, err := analyze(ks, gs)
 	if err != nil {

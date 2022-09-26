@@ -1,9 +1,10 @@
-package kollide
+package kolide
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"log"
 	"net/http"
 	"time"
 )
@@ -12,7 +13,7 @@ type Client struct {
 	apiKey string
 }
 
-func NewClient(apiKey string) *Client {
+func New(apiKey string) *Client {
 	return &Client{apiKey: apiKey}
 }
 
@@ -62,6 +63,10 @@ type Device struct {
 	ProductImageURL string      `json:"product_image_url"`
 }
 
+func (d *Device) String() string {
+	return fmt.Sprintf("%s (%s) [%s - %s]", d.Name, d.OperatingSystem, d.EnrolledAt, d.LastSeenAt)
+}
+
 type getAllDevicesResponse struct {
 	Devices    []Device `json:"data"`
 	Pagination struct {
@@ -92,7 +97,7 @@ func (c *Client) GetAllDevices() ([]Device, error) {
 			return nil, err
 		}
 		defer r.Body.Close()
-		body, err := ioutil.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			return nil, err
 		}
@@ -101,7 +106,9 @@ func (c *Client) GetAllDevices() ([]Device, error) {
 			return nil, err
 		}
 		for _, device := range response.Devices {
-			allDevices = append(allDevices, device)
+			d := device
+			log.Printf("kolide device: %v", d)
+			allDevices = append(allDevices, d)
 		}
 		if response.Pagination.NextCursor == "" {
 			break
