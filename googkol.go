@@ -19,9 +19,8 @@ var (
 
 	kolideAPIKey = os.Getenv("KOLIDE_API_KEY")
 	//	googleAPIKey     = os.Getenv("GOOGLE_API_KEY")
-	slackWebhookURL  = os.Getenv("SLACK_WEBHOOK_URL")
-	maxAge           = 5 * 24 * time.Hour
-	googleDateFormat = "January 2, 2006 at 3:04 PM MST"
+	slackWebhookURL = os.Getenv("SLACK_WEBHOOK_URL")
+	maxAge          = 5 * 24 * time.Hour
 )
 
 func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) {
@@ -32,9 +31,9 @@ func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) 
 		log.Printf("k: %+v", k)
 		if kDevices[email] == nil {
 			kDevices[email] = map[string][]kolide.Device{
-				"Windows": []kolide.Device{},
-				"macOS":   []kolide.Device{},
-				"Linux":   []kolide.Device{},
+				"Windows": {},
+				"macOS":   {},
+				"Linux":   {},
 			}
 		}
 
@@ -63,12 +62,7 @@ func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) 
 		}
 		log.Printf("g: %+v", g)
 
-		seen, err := time.Parse(googleDateFormat, g.LastSync)
-		if err != nil {
-			return nil, fmt.Errorf("parse error for %s: %w", g.LastSync, err)
-		}
-
-		if time.Since(seen) > maxAge {
+		if time.Since(g.LastSyncTime) > maxAge {
 			continue
 		}
 
@@ -76,10 +70,10 @@ func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) 
 		email := g.Email
 		if gDevices[email] == nil {
 			gDevices[email] = map[string][]google.Device{
-				"Windows":  []google.Device{},
-				"macOS":    []google.Device{},
-				"Linux":    []google.Device{},
-				"ChromeOS": []google.Device{},
+				"Windows":  {},
+				"macOS":    {},
+				"Linux":    {},
+				"ChromeOS": {},
 			}
 		}
 
@@ -105,25 +99,36 @@ func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) 
 
 	for email, gOS := range gDevices {
 		kOS, ok := kDevices[email]
+
+		gDevs := []string{}
+
+		for _, gds := range gOS {
+			for _, gd := range gds {
+				gDevs = append(gDevs, gd.String())
+			}
+		}
+
 		if !ok {
-			issues[email] = fmt.Sprintf("No devices are registered to Kolide, missing: %+v", gOS)
+			text := fmt.Sprintf("Google sees %d devices, Kolide sees 0!\nGoogle:\n  %s\n\n",
+				len(gDevs), strings.Join(gDevs, ", \n  "))
+			issues[email] = text
 			continue
 		}
 
 		mismatches := []string{}
 		for _, os := range []string{"Linux", "macOS", "Windows"} {
+
+			kDevs := []string{}
+			for _, kd := range kOS[os] {
+				kDevs = append(kDevs, kd.String())
+			}
+
+			gDevs = []string{}
+			for _, gd := range gOS[os] {
+				gDevs = append(gDevs, gd.String())
+			}
 			if len(gOS[os]) > len(kOS[os]) {
-				gDevs := []string{}
-				for _, gd := range gOS[os] {
-					gDevs = append(gDevs, gd.String())
-				}
-
-				kDevs := []string{}
-				for _, kd := range kOS[os] {
-					kDevs = append(kDevs, kd.String())
-				}
-
-				text := fmt.Sprintf("Google sees %d %s devices, Kolide sees %d\nGoogle:\n  %s\nKolide:\n  %s\n",
+				text := fmt.Sprintf("Google sees %d %s devices, Kolide sees %d\nGoogle:\n  %s\nKolide:\n  %s\n\n",
 					len(gOS[os]), os, len(kOS[os]), strings.Join(gDevs, ", \n  "), strings.Join(kDevs, ", \n  "))
 				mismatches = append(mismatches, text)
 				issues[email] = strings.Join(mismatches, "\n")

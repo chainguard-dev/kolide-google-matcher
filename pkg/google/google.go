@@ -2,9 +2,16 @@ package google
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"time"
 
 	"github.com/gocarina/gocsv"
+)
+
+var (
+	googleDateFormat = "January 2, 2006 at 3:04 PM MST"
+	timeFormat       = "January 2, 2006 at 3:04:05 PM"
 )
 
 type Client struct {
@@ -25,10 +32,13 @@ type Device struct {
 	FirstSync  string `csv:"First Sync"`
 	DeviceName string `csv:"Device Name"`
 	HostName   string `csv:"Host Name"`
+
+	FirstSyncTime time.Time
+	LastSyncTime  time.Time
 }
 
 func (d *Device) String() string {
-	return fmt.Sprintf("%s (%s) [%s - %s]", d.DeviceName, d.OS, d.FirstSync, d.LastSync)
+	return fmt.Sprintf("%s (%s) [%s - %s]", d.DeviceName, d.OS, d.FirstSyncTime.Format(timeFormat), d.LastSyncTime.Format(timeFormat))
 }
 
 func (c *Client) GetAllDevices() ([]Device, error) {
@@ -39,5 +49,23 @@ func (c *Client) GetAllDevices() ([]Device, error) {
 	defer f.Close()
 	ds := []Device{}
 	err = gocsv.UnmarshalFile(f, &ds)
+
+	for i, d := range ds {
+		ts, err := time.Parse(googleDateFormat, d.LastSync)
+		if err != nil {
+			log.Printf("LastSync: parse error for %s: %w", d.LastSync, err)
+		} else {
+			d.LastSyncTime = ts
+		}
+
+		ts, err = time.Parse(googleDateFormat, d.FirstSync)
+		if err != nil {
+			log.Printf("FirstSync: parse error for %s: %w", d.FirstSync, err)
+		} else {
+			d.FirstSyncTime = ts
+		}
+		ds[i] = d
+	}
+
 	return ds, err
 }

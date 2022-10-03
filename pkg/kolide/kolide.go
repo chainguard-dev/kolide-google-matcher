@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var timeFormat = "January 2, 2006 at 3:04:05 PM"
+
 type Client struct {
 	apiKey string
 }
@@ -64,7 +66,7 @@ type Device struct {
 }
 
 func (d *Device) String() string {
-	return fmt.Sprintf("%s (%s) [%s - %s]", d.Name, d.OperatingSystem, d.EnrolledAt, d.LastSeenAt)
+	return fmt.Sprintf("%s (%s) [%s - %s]", d.Name, d.OperatingSystem, d.EnrolledAt.Format(timeFormat), d.LastSeenAt.Format(timeFormat))
 }
 
 type getAllDevicesResponse struct {
