@@ -112,7 +112,7 @@ func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) 
 
 		if !ok {
 			text := fmt.Sprintf("Google sees %d devices, Kolide sees 0!\nGoogle:\n  %s\n\n",
-				len(gDevs), strings.Join(gDevs, ", \n  "))
+				len(gDevs), strings.Join(gDevs, "\n  "))
 			issues[email] = text
 			continue
 		}
@@ -131,7 +131,7 @@ func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) 
 			}
 			if len(gOS[os]) > len(kOS[os]) {
 				text := fmt.Sprintf("Google sees %d %s devices, Kolide sees %d\nGoogle:\n  %s\nKolide:\n  %s\n\n",
-					len(gOS[os]), os, len(kOS[os]), strings.Join(gDevs, ", \n  "), strings.Join(kDevs, ", \n  "))
+					len(gOS[os]), os, len(kOS[os]), strings.Join(gDevs, "\n  "), strings.Join(kDevs, "\n  "))
 				mismatches = append(mismatches, text)
 				issues[email] = strings.Join(mismatches, "\n")
 			}
@@ -171,6 +171,8 @@ func main() {
 			log.Printf("%s mismatch: %s", k, v)
 		}
 	}
+
+	log.Printf("found %d total mismatches", len(mismatches))
 
 	// If SLACK_WEBHOOK_URL set in environment, send a copy of the output to Slack
 	if slackWebhookURL != "" {

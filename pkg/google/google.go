@@ -11,7 +11,7 @@ import (
 
 var (
 	googleDateFormat = "January 2, 2006 at 3:04 PM MST"
-	timeFormat       = "January 2, 2006 at 3:04:05 PM"
+	timeFormat       = "Jan 2, 2006"
 )
 
 type Client struct {
@@ -38,7 +38,8 @@ type Device struct {
 }
 
 func (d *Device) String() string {
-	return fmt.Sprintf("%s (%s) [%s - %s]", d.DeviceName, d.OS, d.FirstSyncTime.Format(timeFormat), d.LastSyncTime.Format(timeFormat))
+	name := fmt.Sprintf("%s (%s)", d.DeviceName, d.OS)
+	return fmt.Sprintf("%-60.60s [%s to %s]", name, d.FirstSyncTime.Format(timeFormat), d.LastSyncTime.Format(timeFormat))
 }
 
 func (c *Client) GetAllDevices() ([]Device, error) {
