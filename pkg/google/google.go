@@ -53,14 +53,14 @@ func (c *Client) GetAllDevices() ([]Device, error) {
 	for i, d := range ds {
 		ts, err := time.Parse(googleDateFormat, d.LastSync)
 		if err != nil {
-			log.Printf("LastSync: parse error for %s: %w", d.LastSync, err)
+			log.Printf("LastSync: parse error for %s: %v", d.LastSync, err)
 		} else {
 			d.LastSyncTime = ts
 		}
 
 		ts, err = time.Parse(googleDateFormat, d.FirstSync)
 		if err != nil {
-			log.Printf("FirstSync: parse error for %s: %w", d.FirstSync, err)
+			log.Printf("FirstSync: parse error for %s: %v", d.FirstSync, err)
 		} else {
 			d.FirstSyncTime = ts
 		}

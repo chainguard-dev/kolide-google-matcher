@@ -10,8 +10,8 @@ import (
 
 	"github.com/slack-go/slack"
 
-	"chainguard.dev/googkol/pkg/google"
-	"chainguard.dev/googkol/pkg/kolide"
+	"github.com/chainguard-dev/kolide-google-matcher/pkg/google"
+	"github.com/chainguard-dev/kolide-google-matcher/pkg/kolide"
 )
 
 var (

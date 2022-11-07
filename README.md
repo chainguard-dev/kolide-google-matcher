@@ -1,6 +1,23 @@
-# googkol
+# kolide-google-matcher
 
-Find & warn on mismatches in Google/Kolide records
+Find machines that have recently logged into a Google Workspace, but lack a matching Kolide agent.
+
+## Installation
+
+```shell
+go install github.com/chainguard-dev/kolide-google-matcher@latest
+```
+
+## Example Output
+
+```shell
+```
+
+## Requirements
+
+* A Kolide API key [https://k2.kolide.com/3361/settings/admin/developers/api_keys](Create a New Key)
+* Access to a Google Workspace admin console
+* The Go Programming Language
 
 ## Usage
 
@@ -14,7 +31,6 @@ Gather the current list of Desktop machines according to Google:
 
 ```shell
 export KOLIDE_API_KEY="..."
-export SLACK_WEBHOOK_URL="..."
 
-go run . --endpoints-csv=</path/to/csv>
+kolide-google-matcher --endpoints-csv=</path/to/csv>
 ```
