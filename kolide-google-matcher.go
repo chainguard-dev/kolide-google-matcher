@@ -23,7 +23,7 @@ var (
 	maxAge          = 5 * 24 * time.Hour
 )
 
-func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) {
+func analyze(ks []kolide.Device, gs []google.Device) map[string]string {
 	kDevices := map[string]map[string][]kolide.Device{}
 
 	for _, k := range ks {
@@ -138,7 +138,7 @@ func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) 
 		}
 	}
 
-	return issues, nil
+	return issues
 }
 
 func main() {
@@ -161,11 +161,7 @@ func main() {
 		log.Fatalf("google: %v", err)
 	}
 
-	mismatches, err := analyze(ks, gs)
-	if err != nil {
-		log.Fatalf("analyze: %v", err)
-	}
-
+	mismatches := analyze(ks, gs)
 	for k, v := range mismatches {
 		if v != "" {
 			log.Printf("%s mismatch: %s", k, v)
