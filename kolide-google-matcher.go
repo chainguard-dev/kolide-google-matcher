@@ -28,7 +28,7 @@ func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) 
 
 	for _, k := range ks {
 		email := k.AssignedOwner.Email
-		log.Printf("k: %+v", k)
+		// log.Printf("k: %+v", k)
 		if kDevices[email] == nil {
 			kDevices[email] = map[string][]kolide.Device{
 				"Windows": {},
@@ -52,6 +52,8 @@ func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) 
 		kDevices[email][os] = append(kDevices[email][os], k)
 	}
 
+	log.Printf("Kolide: found %d devices", len(ks))
+
 	gDevices := map[string]map[string][]google.Device{}
 	inScope := 0
 
@@ -60,7 +62,7 @@ func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) 
 		if g.Name == "" {
 			continue
 		}
-		log.Printf("g: %+v", g)
+		//	log.Printf("g: %+v", g)
 
 		if time.Since(g.LastSyncTime) > maxAge {
 			continue
@@ -94,7 +96,7 @@ func analyze(ks []kolide.Device, gs []google.Device) (map[string]string, error) 
 		gDevices[email][os] = append(gDevices[email][os], g)
 	}
 
-	log.Printf("Google: found %d in-scope devices", inScope)
+	log.Printf("Google: found %d devices", inScope)
 	issues := map[string]string{}
 
 	for email, gOS := range gDevices {
@@ -144,6 +146,10 @@ func main() {
 
 	if kolideAPIKey == "" {
 		log.Fatal("Missing KOLIDE_API_KEY. Exiting.")
+	}
+
+	if *endpointsCSVFlag == "" {
+		log.Fatal("--endpoints-csv is mandatory: download from https://admin.google.com/ac/devices/list?default=true&category=desktop")
 	}
 
 	ks, err := kolide.New(kolideAPIKey).GetAllDevices()

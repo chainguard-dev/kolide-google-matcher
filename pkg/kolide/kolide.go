@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 )
@@ -109,7 +108,7 @@ func (c *Client) GetAllDevices() ([]Device, error) {
 		}
 		for _, device := range response.Devices {
 			d := device
-			log.Printf("kolide device: %v", d)
+			//			log.Printf("kolide device: %v", d)
 			allDevices = append(allDevices, d)
 		}
 		if response.Pagination.NextCursor == "" {
