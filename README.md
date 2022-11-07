@@ -1,6 +1,8 @@
 # kolide-google-matcher
 
-Find machines that have recently logged into a Google Workspace, but lack a matching Kolide agent.
+Discover out-of-compliance hosts that have recently logged into Google Workspace, but lack a matching record in Kolide.
+
+![kolide-google-matcher](images/logo.png?raw=true "kolide-google-matcher logo")
 
 ## Installation
 
@@ -29,7 +31,7 @@ Google:
 
 ## Requirements
 
-* A Kolide API key [https://k2.kolide.com/3361/settings/admin/developers/api_keys](Create a New Key)
+* A Kolide API key [Create a New Key](https://k2.kolide.com/3361/settings/admin/developers/api_keys)
 * Access to a Google Workspace admin console
 * The Go Programming Language
 
@@ -37,7 +39,7 @@ Google:
 
 Gather the current list of Desktop machines according to Google:
 
-1. Visit [https://admin.google.com/ac/devices/list?default=true&category=desktop](Google Admin: Mobile Devices)
+1. Visit [Google Admin: Mobile Devices](https://admin.google.com/ac/devices/list?default=true&category=desktop)
 2. Click the Download button (top right)
 3. Select All columns
 4. Select Comma-separated values (.csv)
