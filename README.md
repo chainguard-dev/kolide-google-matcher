@@ -49,5 +49,5 @@ Then you can run the `kolide-google-matcher`:
 
 ```shell
 export KOLIDE_API_KEY="..."
-kolide-google-matcher --endpoints-csv=</path/to/csv>
+$HOME/go/bin/kolide-google-matcher --endpoints-csv=</path/to/csv>
 ```
