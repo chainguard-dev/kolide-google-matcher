@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gocarina/gocsv"
@@ -52,6 +53,9 @@ func (c *Client) GetAllDevices() ([]Device, error) {
 	err = gocsv.UnmarshalFile(f, &ds)
 
 	for i, d := range ds {
+		// At some point Google switched the ASCII space for a unicode short space
+		d.FirstSync = strings.ReplaceAll(d.FirstSync, "\xe2\x80\xaf", " ")
+		d.LastSync = strings.ReplaceAll(d.LastSync, "\xe2\x80\xaf", " ")
 		ts, err := time.Parse(googleDateFormat, d.LastSync)
 		if err != nil {
 			log.Printf("LastSync: parse error for %s: %v", d.LastSync, err)
