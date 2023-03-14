@@ -1,6 +1,7 @@
 package google
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -44,15 +45,29 @@ func (d *Device) String() string {
 }
 
 func (c *Client) GetAllDevices() ([]Device, error) {
-	f, err := os.OpenFile(c.csvPath, os.O_RDWR|os.O_CREATE, os.ModePerm)
+	bs, err := os.ReadFile(c.csvPath)
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
 	}
-	defer f.Close()
+	if len(bs) < 128 {
+		return nil, fmt.Errorf("%s appears to be incomplete - only %d bytes found", c.csvPath, (bs))
+	}
+
 	ds := []Device{}
-	err = gocsv.UnmarshalFile(f, &ds)
+	err = gocsv.UnmarshalBytes(bs, &ds)
+	if len(ds) == 0 {
+		firstLine := bytes.Split(bs, []byte("\n"))
+		return nil, fmt.Errorf("no valid CSV rows found in %s, first line is:\n%s", c.csvPath, firstLine)
+	}
 
 	for i, d := range ds {
+		if d.DeviceName == "" {
+			return nil, fmt.Errorf("row is missing Device Name column: %s", d.DeviceName)
+		}
+		if d.OS == "" {
+			return nil, fmt.Errorf("row is missing OS column: %s", d.DeviceName)
+		}
+
 		// At some point Google switched the ASCII space for a unicode short space
 		d.FirstSync = strings.ReplaceAll(d.FirstSync, "\xe2\x80\xaf", " ")
 		d.LastSync = strings.ReplaceAll(d.LastSync, "\xe2\x80\xaf", " ")
