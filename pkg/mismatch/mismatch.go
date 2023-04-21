@@ -27,6 +27,10 @@ func isMismatchAcceptable(gs []google.Device, ks []kolide.Device) bool {
 		return false
 	}
 
+	if len(ks) == 0 {
+		return false
+	}
+
 	k := ks[0]
 
 	// We only apply special logic for macOS, as it's where the confusion lies.
