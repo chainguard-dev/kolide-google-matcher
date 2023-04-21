@@ -112,7 +112,7 @@ func similarHostname(a string, b string) bool {
 }
 
 // Analyze finds mismatches between the devices registered within Kolide and those registered within Google
-func Analyze(ks []kolide.Device, gs []google.Device) map[string]string {
+func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, maxCheckinOffset time.Duration) map[string]string {
 	kDevices := map[string]map[string][]kolide.Device{}
 
 	for _, k := range ks {
@@ -192,10 +192,14 @@ func Analyze(ks []kolide.Device, gs []google.Device) map[string]string {
 		kOS, ok := kDevices[email]
 
 		gDevs := []string{}
+		newestLogin := time.Time{}
 
 		for _, gds := range gOS {
 			for _, gd := range gds {
 				gDevs = append(gDevs, gd.String())
+				if gd.LastSyncTime.After(newestLogin) {
+					newestLogin = gd.LastSyncTime
+				}
 			}
 		}
 
@@ -207,11 +211,17 @@ func Analyze(ks []kolide.Device, gs []google.Device) map[string]string {
 		}
 
 		mismatches := []string{}
+		allKDevs := []string{}
+		newestCheckin := time.Time{}
 		for _, os := range []string{"Linux", "macOS", "Windows"} {
 
 			kDevs := []string{}
 			for _, kd := range kOS[os] {
+				if kd.LastSeenAt.After(newestCheckin) {
+					newestCheckin = kd.LastSeenAt
+				}
 				kDevs = append(kDevs, kd.String())
+				allKDevs = append(allKDevs, kd.String())
 			}
 
 			gDevs = []string{}
@@ -228,6 +238,15 @@ func Analyze(ks []kolide.Device, gs []google.Device) map[string]string {
 				mismatches = append(mismatches, text)
 				issues[email] = strings.Join(mismatches, "\n")
 			}
+		}
+
+		if len(allKDevs) > 0 && time.Since(newestLogin) > maxNoLogin {
+			issues[email] = fmt.Sprintf("%d Kolide device(s), but has not logged into Google since %s", len(allKDevs), newestLogin)
+		}
+
+		offset := newestLogin.Sub(newestCheckin)
+		if offset > maxCheckinOffset {
+			issues[email] = fmt.Sprintf("Latest Kolide check-in was %s - %s before their last Google login")
 		}
 	}
 

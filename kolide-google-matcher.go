@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/slack-go/slack"
 
@@ -15,7 +16,9 @@ import (
 )
 
 var (
-	endpointsCSVFlag = flag.String("endpoints-csv", "", "Path to Google Endpoints CSV file")
+	endpointsCSVFlag   = flag.String("endpoints-csv", "", "Path to Google Endpoints CSV file")
+	maxNoLoginDuration = flag.Duration("max-nologin-duration", 13*24*time.Hour, "maximum amount of time someone can go without logging in")
+	maxCheckinOffset   = flag.Duration("max-checkin-offset", 24*time.Hour, "maximum amount of time a checkin is expected after logging in")
 
 	kolideAPIKey = os.Getenv("KOLIDE_API_KEY")
 	//	googleAPIKey     = os.Getenv("GOOGLE_API_KEY")
@@ -42,7 +45,7 @@ func main() {
 		log.Fatalf("google: %v", err)
 	}
 
-	mismatches := mismatch.Analyze(ks, gs)
+	mismatches := mismatch.Analyze(ks, gs, *maxNoLoginDuration, *maxCheckinOffset)
 	for k, v := range mismatches {
 		if v != "" {
 			log.Printf("%s mismatch: %s", k, v)
