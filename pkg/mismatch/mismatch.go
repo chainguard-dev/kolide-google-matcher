@@ -105,10 +105,7 @@ func similarHostname(a string, b string) bool {
 	b, _, _ = strings.Cut(b, ".")
 	a = shortModelName(strings.ToLower(a))
 	b = shortModelName(strings.ToLower(b))
-	if strings.ToLower(a) == strings.ToLower(b) {
-		return true
-	}
-	return false
+	return strings.EqualFold(a, b)
 }
 
 // Analyze finds mismatches between the devices registered within Kolide and those registered within Google
@@ -185,7 +182,7 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 		gDevices[email][os] = append(gDevices[email][os], g)
 	}
 
-	log.Printf("Google: found %d devices", inScope)
+	log.Printf("Google: found %d devices that have logged in within %s", inScope, maxAge)
 	issues := map[string]string{}
 
 	for email, gOS := range gDevices {
@@ -246,7 +243,7 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 
 		offset := newestLogin.Sub(newestCheckin)
 		if offset > maxCheckinOffset {
-			issues[email] = fmt.Sprintf("Latest Kolide check-in was %s - %s before their last Google login")
+			issues[email] = fmt.Sprintf("Latest Kolide check-in was %s - %s before their last Google login", newestCheckin, offset)
 		}
 	}
 
