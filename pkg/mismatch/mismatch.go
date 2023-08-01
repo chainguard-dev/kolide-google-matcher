@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	maxAge          = 7 * 24 * time.Hour
+	maxAge          = 5 * 24 * time.Hour
 	maxCheckinDelta = 14 * 24 * time.Hour
 	// Chrome lies about the OS version in the user agent string
 	chromeUserAgentmacOS = "10.15.7"
