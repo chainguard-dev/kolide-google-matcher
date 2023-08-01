@@ -7,4 +7,7 @@ require (
 	github.com/slack-go/slack v0.12.1
 )
 
-require github.com/gorilla/websocket v1.5.0 // indirect
+require (
+	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/gorilla/websocket v1.5.0 // indirect
+)

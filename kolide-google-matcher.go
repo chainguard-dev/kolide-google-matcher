@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -45,20 +46,30 @@ func main() {
 		log.Fatalf("google: %v", err)
 	}
 
-	mismatches := mismatch.Analyze(ks, gs, *maxNoLoginDuration, *maxCheckinOffset)
-	for k, v := range mismatches {
-		if v != "" {
-			log.Printf("%s mismatch: %s", k, v)
-		}
+	problems := mismatch.Analyze(ks, gs, *maxNoLoginDuration, *maxCheckinOffset)
+	if len(problems) > 0 {
+		fmt.Println("")
+		fmt.Printf("%d accounts have problems:\n", len(problems))
+		fmt.Println("=========================================================================")
 	}
 
-	log.Printf("found %d total mismatches", len(mismatches))
+	count := 0
+	emails := []string{}
+	for k, _ := range problems {
+		emails = append(emails, k)
+	}
+	sort.Strings(emails)
+
+	for _, email := range emails {
+		count++
+		fmt.Printf("[%d] %s: %s\n\n", count, email, problems[email])
+	}
 
 	// If SLACK_WEBHOOK_URL set in environment, send a copy of the output to Slack
 	if slackWebhookURL != "" {
 		log.Println("---\nAttempting to send output to provided Slack webhook...")
 		lines := []string{}
-		for k, v := range mismatches {
+		for k, v := range problems {
 			if v != "" {
 				lines = append(lines, fmt.Sprintf("%s mismatch: %s", k, v))
 			}

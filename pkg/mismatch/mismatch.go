@@ -3,18 +3,23 @@ package mismatch
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/chainguard-dev/kolide-google-matcher/pkg/google"
 	"github.com/chainguard-dev/kolide-google-matcher/pkg/kolide"
+	"github.com/dustin/go-humanize"
 )
 
 var (
-	maxAge          = 5 * 24 * time.Hour
+	maxAge          = 7 * 24 * time.Hour
 	maxCheckinDelta = 14 * 24 * time.Hour
 	// Chrome lies about the OS version in the user agent string
 	chromeUserAgentmacOS = "10.15.7"
+	timeFormat           = "Jan 2 2006"
+
+	versionRE = regexp.MustCompile(`\d[\.\d]+`)
 )
 
 // isMismatchAcceptable determines if a mismatch is acceptable or not
@@ -72,14 +77,18 @@ func isMismatchAcceptable(gs []google.Device, ks []kolide.Device) bool {
 			continue
 		}
 
-		if !strings.Contains(g.OS, k.OperatingSystemDetails.Version) {
-			log.Printf("failed OS version match check: Google is %s, Kolide is %s", g.OS, k.OperatingSystemDetails.Version)
+		// Fuzzy matching, as Kolide may show fuller versions, such as "13.4.1 (c)"
+		gOS := versionRE.FindString(g.OS)
+		kOS := versionRE.FindString(k.OperatingSystemDetails.Version)
+
+		if gOS != kOS {
+			log.Printf("failed OS version match check: Google has %q, Kolide has %q", g.OS, k.OperatingSystemDetails.Version)
 			acceptable = false
 			continue
 		}
 
 		if g.HostName == "" {
-			log.Printf("%s has no hostname, skipping hostname cross-reference", g.DeviceName)
+			// log.Printf("%s has no hostname registered in Google, skipping hostname cross-reference", g.DeviceName)
 			continue
 		}
 
@@ -142,13 +151,18 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 
 	gDevices := map[string]map[string][]google.Device{}
 	inScope := 0
+	lastLogin := map[string]time.Time{}
 
 	for _, g := range gs {
 		// Empty record
 		if g.Name == "" {
 			continue
 		}
+
 		//	log.Printf("g: %+v", g)
+		if lastLogin[g.Email].Before(g.LastSyncTime) {
+			lastLogin[g.Email] = g.LastSyncTime
+		}
 
 		if time.Since(g.LastSyncTime) > maxAge {
 			continue
@@ -183,6 +197,13 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 	}
 
 	log.Printf("Google: found %d devices that have logged in within %s", inScope, maxAge)
+
+	for email, t := range lastLogin {
+		if time.Since(t) > maxAge {
+			log.Printf("Inactive account: %s has not logged into Google since %s (%s)", email, t.Format(timeFormat), humanize.Time(t))
+		}
+	}
+
 	issues := map[string]string{}
 
 	for email, gOS := range gDevices {
@@ -201,14 +222,28 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 		}
 
 		if !ok {
-			text := fmt.Sprintf("Google sees %d devices, Kolide sees 0!\nGoogle:\n  %s\n\n",
+			text := fmt.Sprintf("%d device in Google and none in Kolide\n    %s",
 				len(gDevs), strings.Join(gDevs, "\n  "))
 			issues[email] = text
 			continue
 		}
 
 		mismatches := []string{}
+
+		// Include all operating systems here
 		allKDevs := []string{}
+		for _, kds := range kOS {
+			for _, kd := range kds {
+				allKDevs = append(allKDevs, kd.String())
+			}
+		}
+
+		allGDevs := []string{}
+		for _, gds := range gOS {
+			for _, gd := range gds {
+				allGDevs = append(allGDevs, gd.String())
+			}
+		}
 		newestCheckin := time.Time{}
 		for _, os := range []string{"Linux", "macOS", "Windows"} {
 
@@ -218,7 +253,6 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 					newestCheckin = kd.LastSeenAt
 				}
 				kDevs = append(kDevs, kd.String())
-				allKDevs = append(allKDevs, kd.String())
 			}
 
 			gDevs = []string{}
@@ -230,20 +264,21 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 				if acceptable {
 					continue
 				}
-				text := fmt.Sprintf("Google sees %d %s devices, Kolide sees %d\nGoogle:\n  %s\nKolide:\n  %s\n\n",
-					len(gOS[os]), os, len(kOS[os]), strings.Join(gDevs, "\n  "), strings.Join(kDevs, "\n  "))
+				text := fmt.Sprintf("%d %s device(s) in Google, %d in Kolide\n    Google:\n      %s\n    Kolide:\n      %s",
+					len(gOS[os]), os, len(kOS[os]), strings.Join(allGDevs, "\n      "), strings.Join(allKDevs, "\n      "))
 				mismatches = append(mismatches, text)
 				issues[email] = strings.Join(mismatches, "\n")
 			}
 		}
 
 		if len(allKDevs) > 0 && time.Since(newestLogin) > maxNoLogin {
-			issues[email] = fmt.Sprintf("%d Kolide device(s), but has not logged into Google since %s", len(allKDevs), newestLogin)
+			issues[email] = fmt.Sprintf("%d Kolide device(s), but has not logged into Google since %s", len(allKDevs), newestLogin.Format(timeFormat))
 		}
 
 		offset := newestLogin.Sub(newestCheckin)
 		if offset > maxCheckinOffset {
-			issues[email] = fmt.Sprintf("Latest Kolide check-in was %s - %s before their last Google login", newestCheckin, offset)
+			issues[email] = fmt.Sprintf("Kolide is broken or uninstalled! Latest check-in was %s (%s)",
+				newestCheckin.Format(timeFormat), humanize.Time(newestCheckin))
 		}
 	}
 

@@ -40,8 +40,8 @@ type Device struct {
 }
 
 func (d *Device) String() string {
-	name := fmt.Sprintf("%s (%s)", d.DeviceName, d.OS)
-	return fmt.Sprintf("%-60.60s [%s to %s]", name, d.FirstSyncTime.Format(timeFormat), d.LastSyncTime.Format(timeFormat))
+	name := fmt.Sprintf("%s [%s]", d.DeviceName, d.OS)
+	return fmt.Sprintf("%-45.45s %s — %s", name, d.FirstSyncTime.Format(timeFormat), d.LastSyncTime.Format(timeFormat))
 }
 
 func (c *Client) GetAllDevices() ([]Device, error) {

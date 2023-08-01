@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -65,8 +66,12 @@ type Device struct {
 }
 
 func (d *Device) String() string {
-	name := fmt.Sprintf("%s (%s)", d.Name, d.OperatingSystem)
-	return fmt.Sprintf("%-60.60s [%s to %s]", name, d.EnrolledAt.Format(timeFormat), d.LastSeenAt.Format(timeFormat))
+	name := fmt.Sprintf("%s [%s]", d.Name, d.OperatingSystem)
+	name = strings.ReplaceAll(name, " release", "")
+	name = strings.ReplaceAll(name, "Fedora Linux Fedora", "Fedora")
+	name = strings.ReplaceAll(name, " )", ")")
+	name = strings.TrimSpace(name)
+	return fmt.Sprintf("%-45.45s %s — %s", name, d.EnrolledAt.Format(timeFormat), d.LastSeenAt.Format(timeFormat))
 }
 
 type getAllDevicesResponse struct {
