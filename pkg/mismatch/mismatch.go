@@ -14,6 +14,7 @@ import (
 
 var (
 	maxAge          = 5 * 24 * time.Hour
+	inactiveUserAge = 21 * 24 * time.Hour
 	maxCheckinDelta = 14 * 24 * time.Hour
 	// Chrome lies about the OS version in the user agent string
 	chromeUserAgentmacOS = "10.15.7"
@@ -190,7 +191,7 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 		case "Chrome OS":
 			os = "ChromeOS"
 		default:
-			log.Printf("Ignoring type %s (%s)", g.Type, g.OS)
+			// log.Printf("Ignoring type %s (%s)", g.Type, g.OS)
 			inScope--
 		}
 		gDevices[email][os] = append(gDevices[email][os], g)
@@ -198,13 +199,14 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 
 	log.Printf("Google: found %d devices that have logged in within %s", inScope, maxAge)
 
+	issues := map[string]string{}
+
 	for email, t := range lastLogin {
-		if time.Since(t) > maxAge {
-			log.Printf("Inactive account: %s has not logged into Google since %s (%s)", email, t.Format(timeFormat), humanize.Time(t))
+		if time.Since(t) > maxNoLogin {
+			text := fmt.Sprintf("%s is an inactive account with devices - no logins since %s (%s)", email, t.Format(timeFormat), humanize.Time(t))
+			issues[email] = text
 		}
 	}
-
-	issues := map[string]string{}
 
 	for email, gOS := range gDevices {
 		kOS, ok := kDevices[email]
@@ -223,7 +225,7 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 
 		if !ok {
 			text := fmt.Sprintf("%d device in Google and none in Kolide\n    %s",
-				len(gDevs), strings.Join(gDevs, "\n  "))
+				len(gDevs), strings.Join(gDevs, "\n    "))
 			issues[email] = text
 			continue
 		}
@@ -271,14 +273,11 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 			}
 		}
 
-		if len(allKDevs) > 0 && time.Since(newestLogin) > maxNoLogin {
-			issues[email] = fmt.Sprintf("%d Kolide device(s), but has not logged into Google since %s", len(allKDevs), newestLogin.Format(timeFormat))
-		}
-
 		offset := newestLogin.Sub(newestCheckin)
 		if offset > maxCheckinOffset {
-			issues[email] = fmt.Sprintf("Kolide is broken or uninstalled! Latest check-in was %s (%s)",
-				newestCheckin.Format(timeFormat), humanize.Time(newestCheckin))
+			issues[email] = fmt.Sprintf("Kolide agent is broken or uninstalled!\n    Latest Kolide check-in: %s (%s)\n    Latest Google login:    %s (%s)",
+				newestCheckin.Format(timeFormat), humanize.Time(newestCheckin),
+				newestLogin.Format(timeFormat), humanize.Time(newestLogin))
 		}
 	}
 
