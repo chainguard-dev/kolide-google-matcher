@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	maxAge          = 5 * 24 * time.Hour
+	maxAge          = 6 * 24 * time.Hour
 	inactiveUserAge = 21 * 24 * time.Hour
 	maxCheckinDelta = 14 * 24 * time.Hour
 	// Chrome lies about the OS version in the user agent string
@@ -23,15 +23,20 @@ var (
 	versionRE = regexp.MustCompile(`\d[\.\d]+`)
 )
 
+func mobileDeviceName(s string) bool {
+	return strings.Contains(s, "iPhone")
+}
+
 // isMismatchAcceptable determines if a mismatch is acceptable or not
 func isMismatchAcceptable(gs []google.Device, ks []kolide.Device) bool {
 	if len(ks) > 1 {
+		log.Printf("multiple kolide devices: %v", ks)
 		return false
 	}
 
-	if len(gs) > 2 {
-		return false
-	}
+	//	if len(gs) > 2 {
+	//		return false
+	//	}
 
 	if len(ks) == 0 {
 		return false
@@ -41,6 +46,7 @@ func isMismatchAcceptable(gs []google.Device, ks []kolide.Device) bool {
 
 	// We only apply special logic for macOS, as it's where the confusion lies.
 	if k.Platform != "darwin" {
+		log.Printf("non-darwin: %+v", k)
 		return false
 	}
 
@@ -56,7 +62,20 @@ func isMismatchAcceptable(gs []google.Device, ks []kolide.Device) bool {
 	for _, g := range gs {
 		// To be acceptable, all devices must share the same prefix
 		if !strings.HasPrefix(g.DeviceName, shortest) {
+			log.Printf("%s does not contain %s", g.DeviceName, shortest)
 			acceptable = false
+		}
+
+		// It's just Chrome
+		if strings.Contains(g.OS, chromeUserAgentmacOS) {
+			if g.HostName == "" {
+				continue
+			}
+		}
+
+		if mobileDeviceName(g.HostName) {
+			log.Printf("mobile device that Google thinks is %s: %s", g.OS, g.HostName)
+			continue
 		}
 
 		startDelta := g.FirstSyncTime.Sub(k.EnrolledAt).Abs()
@@ -69,12 +88,7 @@ func isMismatchAcceptable(gs []google.Device, ks []kolide.Device) bool {
 		endDelta := g.LastSyncTime.Sub(k.LastSeenAt).Abs()
 		if endDelta > maxCheckinDelta {
 			acceptable = false
-			log.Printf("%s exceeded end checkin delta check: %s", g.DeviceName, endDelta)
-			continue
-		}
-
-		// It's just Chrome
-		if strings.Contains(g.OS, chromeUserAgentmacOS) && g.HostName == "" {
+			log.Printf("%s exceeded end checkin delta check: %s -- %+v", g.DeviceName, endDelta, g)
 			continue
 		}
 
@@ -94,10 +108,16 @@ func isMismatchAcceptable(gs []google.Device, ks []kolide.Device) bool {
 		}
 
 		if !similarHostname(g.HostName, k.Name) {
-			log.Printf("failed hostname check: Google is %s, Kolide is %s", g.HostName, k.Name)
+			log.Printf("dissimilar hostname: Google is %s, Kolide is %s -- %+v", g.HostName, k.Name, g)
 			acceptable = false
 			continue
 		}
+	}
+
+	if !acceptable {
+		log.Printf("found probable mismatch:")
+		log.Printf("google: %+v", gs)
+		log.Printf("kolide: %+v", ks)
 	}
 
 	return acceptable
@@ -121,6 +141,7 @@ func similarHostname(a string, b string) bool {
 // Analyze finds mismatches between the devices registered within Kolide and those registered within Google
 func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, maxCheckinOffset time.Duration) map[string]string {
 	kDevices := map[string]map[string][]kolide.Device{}
+	lastCheckin := map[string]time.Time{}
 
 	for _, k := range ks {
 		email := k.AssignedOwner.Email
@@ -143,6 +164,10 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 		default:
 			// Assume Linux, this could be various values (arch, rhel, etc.)
 			os = "Linux"
+		}
+
+		if k.LastSeenAt.After(lastCheckin[email]) {
+			lastCheckin[email] = k.LastSeenAt
 		}
 
 		kDevices[email][os] = append(kDevices[email][os], k)
@@ -203,8 +228,12 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 
 	for email, t := range lastLogin {
 		if time.Since(t) > maxNoLogin {
-			text := fmt.Sprintf("%s is an inactive account with devices - no logins since %s (%s)", email, t.Format(timeFormat), humanize.Time(t))
-			issues[email] = text
+			devices := len(kDevices[email])
+			if devices > 0 {
+				lc := lastCheckin[email]
+				text := fmt.Sprintf("%s is an inactive account with %d Kolide devices - no logins since %s (%s). Last Kolide checkin was %s (%s)", email, devices, t.Format(timeFormat), humanize.Time(t), lc.Format(timeFormat), humanize.Time(lc))
+				issues[email] = text
+			}
 		}
 	}
 

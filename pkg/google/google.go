@@ -62,10 +62,10 @@ func (c *Client) GetAllDevices() ([]Device, error) {
 
 	for i, d := range ds {
 		if d.DeviceName == "" {
-			return nil, fmt.Errorf("row is missing Device Name column: %s", d.DeviceName)
+			return nil, fmt.Errorf("row is missing Device Name column: %s - %+v", d.DeviceName, d)
 		}
 		if d.OS == "" {
-			return nil, fmt.Errorf("row is missing OS column: %s", d.DeviceName)
+			d.OS = d.Type
 		}
 
 		// At some point Google switched the ASCII space for a unicode short space
