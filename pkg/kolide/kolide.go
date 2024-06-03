@@ -66,12 +66,12 @@ type Device struct {
 }
 
 func (d *Device) String() string {
-	name := fmt.Sprintf("%s [%s]", d.Name, d.OperatingSystem)
+	name := fmt.Sprintf("%s [%s] - %s", d.Name, d.Serial, strings.TrimSpace(d.OperatingSystem))
 	name = strings.ReplaceAll(name, " release", "")
 	name = strings.ReplaceAll(name, "Fedora Linux Fedora", "Fedora")
 	name = strings.ReplaceAll(name, " )", ")")
 	name = strings.TrimSpace(name)
-	return fmt.Sprintf("%-45.45s %s — %s", name, d.EnrolledAt.Format(timeFormat), d.LastSeenAt.Format(timeFormat))
+	return fmt.Sprintf("%-65.65s %s — %s", name, d.EnrolledAt.Format(timeFormat), d.LastSeenAt.Format(timeFormat))
 }
 
 type getAllDevicesResponse struct {

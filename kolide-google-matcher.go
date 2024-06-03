@@ -55,14 +55,15 @@ func main() {
 
 	count := 0
 	emails := []string{}
-	for k, _ := range problems {
+	for k := range problems {
 		emails = append(emails, k)
 	}
 	sort.Strings(emails)
 
 	for _, email := range emails {
 		count++
-		fmt.Printf("[%d] %s: %s\n\n", count, email, problems[email])
+		fmt.Printf("[%d] %s\n", count, email)
+		fmt.Printf("    PROBLEM: %s\n\n", problems[email])
 	}
 
 	// If SLACK_WEBHOOK_URL set in environment, send a copy of the output to Slack

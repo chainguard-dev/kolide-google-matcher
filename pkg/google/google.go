@@ -34,14 +34,25 @@ type Device struct {
 	FirstSync  string `csv:"First Sync"`
 	DeviceName string `csv:"Device Name"`
 	HostName   string `csv:"Host Name"`
+	ID         string `csv:"Device ID"`
+	Serial     string `csv:"Serial Number (mandatory)"`
 
 	FirstSyncTime time.Time
 	LastSyncTime  time.Time
 }
 
 func (d *Device) String() string {
-	name := fmt.Sprintf("%s [%s]", d.DeviceName, d.OS)
-	return fmt.Sprintf("%-45.45s %s — %s", name, d.FirstSyncTime.Format(timeFormat), d.LastSyncTime.Format(timeFormat))
+	name := d.DeviceName
+	if d.HostName != "" {
+		name = d.HostName
+	}
+	serial := "no-serial"
+	if d.Serial != "" {
+		serial = d.Serial
+	}
+
+	title := fmt.Sprintf("%s [%s] - %s", name, serial, d.OS)
+	return fmt.Sprintf("%-65.65s %s — %s", title, d.FirstSyncTime.Format(timeFormat), d.LastSyncTime.Format(timeFormat))
 }
 
 func (c *Client) GetAllDevices() ([]Device, error) {

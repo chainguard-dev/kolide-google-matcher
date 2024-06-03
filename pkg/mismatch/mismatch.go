@@ -14,9 +14,8 @@ import (
 
 var (
 	maxAge          = 6 * 24 * time.Hour
-	inactiveUserAge = 21 * 24 * time.Hour
 	maxCheckinDelta = 14 * 24 * time.Hour
-	// Chrome lies about the OS version in the user agent string
+	// Chrome lies about the OS version in the user agent string.
 	chromeUserAgentmacOS = "10.15.7"
 	timeFormat           = "Jan 2 2006"
 
@@ -27,16 +26,12 @@ func mobileDeviceName(s string) bool {
 	return strings.Contains(s, "iPhone")
 }
 
-// isMismatchAcceptable determines if a mismatch is acceptable or not
+// isMismatchAcceptable determines if a mismatch is acceptable or not.
 func isMismatchAcceptable(gs []google.Device, ks []kolide.Device) bool {
 	if len(ks) > 1 {
 		log.Printf("multiple kolide devices: %v", ks)
 		return false
 	}
-
-	//	if len(gs) > 2 {
-	//		return false
-	//	}
 
 	if len(ks) == 0 {
 		return false
@@ -95,9 +90,11 @@ func isMismatchAcceptable(gs []google.Device, ks []kolide.Device) bool {
 		// Fuzzy matching, as Kolide may show fuller versions, such as "13.4.1 (c)"
 		gOS := versionRE.FindString(g.OS)
 		kOS := versionRE.FindString(k.OperatingSystemDetails.Version)
+		gOS = strings.ReplaceAll(gOS, ".0", "")
+		kOS = strings.ReplaceAll(kOS, ".0", "")
 
 		if gOS != kOS {
-			log.Printf("failed OS version match check: Google has %q, Kolide has %q", g.OS, k.OperatingSystemDetails.Version)
+			log.Printf("failed OS version match check: Google has %q (%s), Kolide has %q (%s)", gOS, g.OS, kOS, k.OperatingSystemDetails.Version)
 			acceptable = false
 			continue
 		}
@@ -138,7 +135,7 @@ func similarHostname(a string, b string) bool {
 	return strings.EqualFold(a, b)
 }
 
-// Analyze finds mismatches between the devices registered within Kolide and those registered within Google
+// Analyze finds mismatches between the devices registered within Kolide and those registered within Google.
 func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, maxCheckinOffset time.Duration) map[string]string {
 	kDevices := map[string]map[string][]kolide.Device{}
 	lastCheckin := map[string]time.Time{}
@@ -154,8 +151,7 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 			}
 		}
 
-		os := ""
-
+		var os string
 		switch k.Platform {
 		case "windows":
 			os = "Windows"
@@ -253,7 +249,7 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 		}
 
 		if !ok {
-			text := fmt.Sprintf("%d device in Google and none in Kolide\n    %s",
+			text := fmt.Sprintf("%d device in Google and none in Kolide\n\n    %s",
 				len(gDevs), strings.Join(gDevs, "\n    "))
 			issues[email] = text
 			continue
@@ -277,7 +273,6 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 		}
 		newestCheckin := time.Time{}
 		for _, os := range []string{"Linux", "macOS", "Windows"} {
-
 			kDevs := []string{}
 			for _, kd := range kOS[os] {
 				if kd.LastSeenAt.After(newestCheckin) {
@@ -295,7 +290,7 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 				if acceptable {
 					continue
 				}
-				text := fmt.Sprintf("%d %s device(s) in Google, %d in Kolide\n    Google:\n      %s\n    Kolide:\n      %s",
+				text := fmt.Sprintf("%d %s device(s) logged into Google, %d enrolled in Kolide\n\n    Google:\n      %s\n    Kolide:\n      %s",
 					len(gOS[os]), os, len(kOS[os]), strings.Join(allGDevs, "\n      "), strings.Join(allKDevs, "\n      "))
 				mismatches = append(mismatches, text)
 				issues[email] = strings.Join(mismatches, "\n")
@@ -304,7 +299,7 @@ func Analyze(ks []kolide.Device, gs []google.Device, maxNoLogin time.Duration, m
 
 		offset := newestLogin.Sub(newestCheckin)
 		if offset > maxCheckinOffset {
-			issues[email] = fmt.Sprintf("Kolide agent is broken or uninstalled!\n    Latest Kolide check-in: %s (%s)\n    Latest Google login:    %s (%s)",
+			issues[email] = fmt.Sprintf("Kolide agent is broken or uninstalled!\n\n    Latest Kolide check-in: %s (%s)\n    Latest Google login:    %s (%s)",
 				newestCheckin.Format(timeFormat), humanize.Time(newestCheckin),
 				newestLogin.Format(timeFormat), humanize.Time(newestLogin))
 		}
