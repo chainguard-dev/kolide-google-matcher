@@ -10,6 +10,8 @@ on:
 env:
   GO_VERSION: 1.18
 
+permissions: {}
+
 jobs:
   ko-build:
     name: Release image
@@ -26,6 +28,11 @@ jobs:
       COSIGN_EXPERIMENTAL: "true"
 
     steps:
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+      with:
+        egress-policy: audit
+
     - uses: actions/setup-go@b22fbbc2921299758641fab08929b4ac52b32923 # v2.2.0
       with:
         go-version: ${{ env.GO_VERSION }}
